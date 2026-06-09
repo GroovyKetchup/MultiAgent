@@ -17,7 +17,6 @@ import gpf.adur.data.Form;
 import gpf.adur.data.FormField;
 import gpf.adur.data.FormModel;
 import gpf.adur.user.User;
-import octo.cm.dto.app.IpWhitelistConfigDto;
 import octo.cm.util.ApplicationUtil;
 import octo.cm.util.EasyOperation;
 import octo.cm.util.FormToJsonConversionUtil;
@@ -75,10 +74,8 @@ public interface IApplicationExpr extends CellIntf {
             }
 
             appForm.setAttrValue(FormToJsonConversionUtil.PREFIX_NEED_UUID, true);
-            JSONObject appConfig = FormToJsonConversionUtil
+            return FormToJsonConversionUtil
                     .convert(appForm);
-            ApplicationUtil.exposeIpWhitelistConfig(appConfig, appForm);
-            return appConfig;
         }
     }
 
@@ -106,8 +103,6 @@ public interface IApplicationExpr extends CellIntf {
 
 
         try (IDao dao = IDaoService.newIDao()) {
-            IpWhitelistConfigDto ipWhitelistConfig = ApplicationUtil.takeIpWhitelistConfig(jsonObject);
-
             // 通过业务域去搜索
             String applicationCode = ApplicationUtil
                     .getDefaultPublishApplicationCode(observer);
@@ -119,10 +114,6 @@ public interface IApplicationExpr extends CellIntf {
             Form form = JsonToFormConversionUtil.convert(appForm, jsonObject);
 
             if (form == null) throw new RuntimeException("应用配置数据有误，无法进行转换");
-
-            if (ipWhitelistConfig != null) {
-                ApplicationUtil.setIpWhitelistConfig(form, ipWhitelistConfig);
-            }
 
             IFormMgr.get().updateForm(null, dao, form, observer);
             IApplicationDeploy.get().deploy(Progress.newOutput(), dao, form, observer);
