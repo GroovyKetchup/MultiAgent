@@ -20,10 +20,7 @@ import cn.hutool.core.util.StrUtil;
 import octocm.domain.dto.DomainDto;
 import org.nutz.dao.entity.annotation.Comment;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Comment("群聊引擎管理类")
@@ -49,92 +46,96 @@ public class GroupChatEngineManager {
     // 获取或创建GroupChatEngine
     public static GroupChatEngine getOrCreateChatEngine(String groupChatInstId) {
         GroupChatEngine chatEngine = getGroupChatEngine(groupChatInstId);
-        if (chatEngine == null) {
+        try {
+            if (chatEngine == null) {
 
-            // 尝试从归档加载
-            chatEngine = GroupChatEngineStoreUtil.tryLoadStoredData(groupChatInstId);
+                // 尝试从归档加载
+                chatEngine = GroupChatEngineStoreUtil.tryLoadStoredData(groupChatInstId);
 
-            if (chatEngine != null) {
+                if (chatEngine != null) {
 
-                GroupDefinition groupDefinition = GroupDefinitionManager.getDefinition(chatEngine.getGroupChatInstance().getGroupCode());
-                GroupChatInstance groupChatInst = GroupChatInstanceManager.getInstance()
-                        .reCreateGroupChatInstance(groupDefinition, chatEngine.getGroupChatInstance().getInstanceId());
-                chatEngine.setGroupChatInstance(groupChatInst);
+                    GroupDefinition groupDefinition = GroupDefinitionManager.getDefinition(chatEngine.getGroupChatInstance().getGroupCode());
+                    GroupChatInstance groupChatInst = GroupChatInstanceManager.getInstance()
+                            .reCreateGroupChatInstance(groupDefinition, chatEngine.getGroupChatInstance().getInstanceId());
+                    chatEngine.setGroupChatInstance(groupChatInst);
 
-                ENGINE_CACHE.put(chatEngine.getBusDomain().getDomainCode(),
-                        chatEngine);
-                ENGINE_CACHE.put(chatEngine.getGroupChatInstance().getInstanceId(),
-                        chatEngine);
+                    ENGINE_CACHE.put(chatEngine.getBusDomain().getDomainCode(),
+                            chatEngine);
+                    ENGINE_CACHE.put(chatEngine.getGroupChatInstance().getInstanceId(),
+                            chatEngine);
 
-                // 更新定义
-                GroupDefinitionManager.tryUpdateDefinition(groupDefinition);
+                    // 更新定义
+                    GroupDefinitionManager.tryUpdateDefinition(groupDefinition);
 
-                // FIXME 这里最好从房间取
-                DomainDto busDomain = chatEngine.getBusDomain();
-                GroupChatEngineConfig engineConfig = chatEngine.getEngineConfig();
-                if (busDomain != null && engineConfig != null) {
+                    // FIXME 这里最好从房间取
+                    DomainDto busDomain = chatEngine.getBusDomain();
+                    GroupChatEngineConfig engineConfig = chatEngine.getEngineConfig();
+                    if (busDomain != null && engineConfig != null) {
 
-                    // 1、刷新支持的模型列表
-                    engineConfig.refreshSupportModelNames();
+                        // 1、刷新支持的模型列表
+                        engineConfig.refreshSupportModelNames();
 
-                    // 2、从配置中更新历史对话管理器的相关设置
-                    MessageHistoryManager messageHistoryManager = chatEngine.getMessageHistoryManager();
-                    if (messageHistoryManager != null && engineConfig.getContextTimeLimit() > 0) {
-                        messageHistoryManager.setContextTimeLimit(engineConfig.getContextTimeLimit());
+                        // 2、从配置中更新历史对话管理器的相关设置
+                        MessageHistoryManager messageHistoryManager = chatEngine.getMessageHistoryManager();
+                        if (messageHistoryManager != null && engineConfig.getContextTimeLimit() > 0) {
+                            messageHistoryManager.setContextTimeLimit(engineConfig.getContextTimeLimit());
+                        }
+
                     }
 
+
+                    chatEngine.start(); // 启动引擎
+
+
+                    // 测试
+                    if (enableMockSubSessionMode) {
+                        mockSubSession(chatEngine);
+                    }
+
+                    return chatEngine;
                 }
 
-
-                chatEngine.start(); // 启动引擎
-
-
-                // 测试
-                if (enableMockSubSessionMode) {
-                    mockSubSession(chatEngine);
-                }
-
-                return chatEngine;
             }
 
-        }
+
+            if (chatEngine != null) return chatEngine;
+
+            if (ENGINE_CACHE.size() > MAX_CHAT_ENGINE_NO) {
+                try {
+                    GroupChatEngine groupChatEngine = ENGINE_CACHE.values().iterator().next();
+                    groupChatEngine.stop();
+                    ConsolePrintUtil.printRedLn(StrUtil.format("ChatEngine数量超过系统最大数量[{}], 移除房间[{}]", MAX_CHAT_ENGINE_NO, groupChatEngine
+                            .getBusDomain().getDomainCode()));
+                } catch (Exception ignored) {
+
+                }
+            }
+
+            GroupChatInstanceManager groupChatInstManager = GroupChatInstanceManager.getInstance();
+            GroupChatInstance groupChatInst = groupChatInstManager.getGroupChatInstance(groupChatInstId);
+
+            if (groupChatInst == null)
+                throw new RuntimeException(StrUtil.format("无法创建聊天引擎，未找到群聊实例[{}]", groupChatInstId));
 
 
-        if (chatEngine != null) return chatEngine;
+            return ENGINE_CACHE.computeIfAbsent(groupChatInstId, id -> {
 
-        if (ENGINE_CACHE.size() > MAX_CHAT_ENGINE_NO) {
+                GroupChatEngine engine = createGroupChatEngine(groupChatInst);
+
+                // 保存到cell统一管理
+                engine.start(); // 启动引擎
+                return engine;
+            });
+        } finally {
             try {
-                GroupChatEngine groupChatEngine = ENGINE_CACHE.values().iterator().next();
-                groupChatEngine.stop();
-                ConsolePrintUtil.printRedLn(StrUtil.format("ChatEngine数量超过系统最大数量[{}], 移除房间[{}]", MAX_CHAT_ENGINE_NO, groupChatEngine
-                        .getBusDomain().getDomainCode()));
+                // FIXME 后面再统一整改
+                IGroupChatEngineServiceCell engineServiceCell = IGroupChatEngineServiceCell.get();
+                engineServiceCell.log();
             } catch (Exception ignored) {
 
             }
-        }
-
-        GroupChatInstanceManager groupChatInstManager = GroupChatInstanceManager.getInstance();
-        GroupChatInstance groupChatInst = groupChatInstManager.getGroupChatInstance(groupChatInstId);
-
-        if (groupChatInst == null)
-            throw new RuntimeException(StrUtil.format("无法创建聊天引擎，未找到群聊实例[{}]", groupChatInstId));
-
-
-        try {
-            // FIXME 后面再统一整改
-            IGroupChatEngineServiceCell engineServiceCell = IGroupChatEngineServiceCell.get();
-            engineServiceCell.log();
-        } catch (Exception ignored) {
 
         }
-        return ENGINE_CACHE.computeIfAbsent(groupChatInstId, id -> {
-
-            GroupChatEngine engine = createGroupChatEngine(groupChatInst);
-
-            // 保存到cell统一管理
-            engine.start(); // 启动引擎
-            return engine;
-        });
     }
 
 
@@ -213,14 +214,40 @@ public class GroupChatEngineManager {
 
     public static void stopAllChatEngine() {
         ConsolePrintUtil.printGreenLn(
-                StrUtil.format("GroupChatEngineServiceCell: stop All GroupChatEngine.")
+                StrUtil.format("GroupChatEngineServiceCell: stop All GroupChatEngine. 当前缓存数量: {}", ENGINE_CACHE.size())
         );
+
+        // [诊断日志] 打印所有缓存 key 和对应引擎的线程状态
+        for (Map.Entry<String, GroupChatEngine> entry : ENGINE_CACHE.entrySet()) {
+            GroupChatEngine engine = entry.getValue();
+            Thread t = engine.getCurrentThread();
+            ConsolePrintUtil.printRedLn(StrUtil.format(
+                    "[线程诊断][stopAll] cacheKey={}, engineIdentity={}, threadName={}, threadAlive={}, threadState={}, running={}",
+                    entry.getKey(), System.identityHashCode(engine),
+                    t != null ? t.getName() : "null",
+                    t != null && t.isAlive(),
+                    t != null ? t.getState() : "null",
+                    engine.isRunningRaw()
+            ));
+        }
+
+        // 去重：多个 key 可能指向同一个 engine
         Collection<GroupChatEngine> values = ENGINE_CACHE.values();
         if (CollUtil.isNotEmpty(values)) {
-            for (GroupChatEngine value : values) {
+            Set<GroupChatEngine> distinctEngines = new HashSet<>(values);
+            ConsolePrintUtil.printRedLn(StrUtil.format(
+                    "[线程诊断][stopAll] 缓存 entries={}, 去重后引擎数={}",
+                    values.size(), distinctEngines.size()
+            ));
+            for (GroupChatEngine value : distinctEngines) {
                 value.stop();
             }
         }
+
+        ENGINE_CACHE.clear();
+        ConsolePrintUtil.printGreenLn(
+                StrUtil.format("GroupChatEngineServiceCell: stop All GroupChatEngine 完成, 缓存已清空.")
+        );
     }
 
     public static void storeAllChatEngine() {

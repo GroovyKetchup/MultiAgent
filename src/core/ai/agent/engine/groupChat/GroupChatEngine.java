@@ -291,8 +291,28 @@ public class GroupChatEngine implements Runnable, Serializable {
         } else {
             threadId = IdUtil.fastSimpleUUID();
         }
+
+        // [诊断日志] 检查是否存在未死亡的旧线程
+        if (this.currentThread != null) {
+            Thread oldThread = this.currentThread;
+            ConsolePrintUtil.printRedLn(StrUtil.format(
+                    "[线程诊断][start] 创建新线程前，旧线程状态: name={}, alive={}, state={}, running={}, hashCode={}",
+                    oldThread.getName(), oldThread.isAlive(), oldThread.getState(),
+                    this.running, System.identityHashCode(oldThread)
+            ));
+            if (oldThread.isAlive() && this.running) {
+                ConsolePrintUtil.printRedLn(StrUtil.format(
+                        "[线程诊断][start] 警告: 旧线程仍在运行且 running=true，可能导致线程泄漏! oldThread={}, engineIdentity={}",
+                        oldThread.getName(), System.identityHashCode(this)
+                ));
+            }
+        }
+
         Thread engineThread = new Thread(this, StrUtil.format("GroupChatEngine_{}", threadId));
-        ConsolePrintUtil.printRedLn("[群组聊天引擎] 启动线程: " + engineThread.getName());
+        ConsolePrintUtil.printRedLn(StrUtil.format(
+                "[群组聊天引擎] 启动线程: {}, engineIdentity={}, hashCode={}",
+                engineThread.getName(), System.identityHashCode(this), System.identityHashCode(engineThread)
+        ));
         this.running = true;
         this.currentThread = engineThread;
 
@@ -304,6 +324,15 @@ public class GroupChatEngine implements Runnable, Serializable {
      */
     public void stop() {
 
+        Thread oldThread = this.currentThread;
+        ConsolePrintUtil.printRedLn(StrUtil.format(
+                "[线程诊断][stop] 开始停止引擎, engineIdentity={}, oldThread={}, oldThreadAlive={}, running={}",
+                System.identityHashCode(this),
+                oldThread != null ? oldThread.getName() : "null",
+                oldThread != null && oldThread.isAlive(),
+                this.running
+        ));
+
         this.running = false;
 
         if (subSessionManager != null) {
@@ -314,6 +343,10 @@ public class GroupChatEngine implements Runnable, Serializable {
         if (this.currentThread != null) {
             // 打断线程运行
             this.currentThread.interrupt();
+            ConsolePrintUtil.printRedLn(StrUtil.format(
+                    "[线程诊断][stop] 已 interrupt 线程: {}, running 已设为 false",
+                    this.currentThread.getName()
+            ));
         }
     }
 
@@ -323,8 +356,24 @@ public class GroupChatEngine implements Runnable, Serializable {
      */
     public void reStart() {
 
+        Thread oldThread = this.currentThread;
+        ConsolePrintUtil.printRedLn(StrUtil.format(
+                "[线程诊断][reStart] 开始重启引擎, engineIdentity={}, oldThread={}, oldThreadAlive={}, oldThreadState={}, running={}",
+                System.identityHashCode(this),
+                oldThread != null ? oldThread.getName() : "null",
+                oldThread != null && oldThread.isAlive(),
+                oldThread != null ? oldThread.getState() : "null",
+                this.running
+        ));
+
         try {
-            this.currentThread.interrupt();
+            if (this.currentThread != null) {
+                this.currentThread.interrupt();
+                ConsolePrintUtil.printRedLn(StrUtil.format(
+                        "[线程诊断][reStart] 已 interrupt 旧线程: {}, 但未设置 running=false",
+                        this.currentThread.getName()
+                ));
+            }
         } catch (Exception e) {
             ConsolePrintUtil.printRedLn(ExceptionUtils.getFullStackTrace(e));
         }
@@ -373,7 +422,22 @@ public class GroupChatEngine implements Runnable, Serializable {
             } catch (InterruptedException e) {
                 // 线程被中断（通常是打断操作导致），清除中断状态并继续运行
                 Thread.interrupted(); // 清除中断标志
-                ConsolePrintUtil.printYellowLn("[群组聊天引擎] 线程被中断，已清除中断状态，继续运行");
+                ConsolePrintUtil.printYellowLn(StrUtil.format(
+                        "[线程诊断][run] InterruptedException 被捕获, running={}, threadName={}, engineIdentity={}, hashCode={}",
+                        running, Thread.currentThread().getName(),
+                        System.identityHashCode(this), System.identityHashCode(Thread.currentThread())
+                ));
+                if (!running) {
+                    ConsolePrintUtil.printYellowLn(StrUtil.format(
+                            "[线程诊断][run] running=false, 线程将退出循环: {}",
+                            Thread.currentThread().getName()
+                    ));
+                } else {
+                    ConsolePrintUtil.printYellowLn(StrUtil.format(
+                            "[线程诊断][run] running=true, 线程将继续运行（潜在泄漏）: {}",
+                            Thread.currentThread().getName()
+                    ));
+                }
             } catch (Exception e) {
                 ConsolePrintUtil.printRedLn("[群组聊天引擎] 处理消息时发生错误: \n" +
                         ExceptionUtils.getFullStackTrace(e));
@@ -381,6 +445,11 @@ public class GroupChatEngine implements Runnable, Serializable {
             }
         }
 
+        ConsolePrintUtil.printRedLn(StrUtil.format(
+                "[线程诊断][run] 线程已退出 while 循环, threadName={}, engineIdentity={}, hashCode={}",
+                Thread.currentThread().getName(), System.identityHashCode(this),
+                System.identityHashCode(Thread.currentThread())
+        ));
         ConsolePrintUtil.printRedLn("[群组聊天引擎] 已停止");
     }
 
@@ -793,6 +862,11 @@ public class GroupChatEngine implements Runnable, Serializable {
         if (!running) {
             stop();
         }
+        return running;
+    }
+
+    // 无副作用的运行状态检查（仅用于诊断日志）
+    public boolean isRunningRaw() {
         return running;
     }
 

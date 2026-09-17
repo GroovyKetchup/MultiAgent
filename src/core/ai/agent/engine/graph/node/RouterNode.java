@@ -56,10 +56,7 @@ public class RouterNode extends AbstractGraphNode {
         String targetPlaningNode = isCanvasOpen ? NODE_CANVAS_PLANING : NODE_GENERAL_PLANING;
         String targetDirectExecutionNode = NODE_EXECUTOR;
 
-        if(true){
-            return NodeExecutionResult.toNode(targetPlaningNode)
-                    .withReason("复杂任务需要规划");
-        }
+
 
         WorkflowTemplateRegistry workflowRegistry = WorkflowTemplateRegistry.getInstance();
         if (workflowRegistry.tryApplyWorkflowTemplate(ctx, triggerMessage)) {
@@ -68,6 +65,12 @@ public class RouterNode extends AbstractGraphNode {
                     .withReason("工作流模板匹配")
                     .withSummary("已应用工作流模板");
         }
+
+        if(true){
+            return NodeExecutionResult.toNode(NODE_EXECUTOR)
+                    .withReason("省略计划，直接开始");
+        }
+
 
         try {
             ConsolePrintUtil.printGreenLn("[RouterNode] 开始执行路由判定");

@@ -12,6 +12,7 @@ import ai.agent.service.groupChat.manager.LLMConfigManager;
 import ai.agent.util.ConsolePrintUtil;
 import ai.agent.util.groupChat.GroupChatMessageSender;
 import ai.agent.util.llmCalling.ToolSkipStrategy;
+import cn.hutool.core.util.StrUtil;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -277,9 +278,22 @@ public class SubSessionManager {
 
     // 停止所有子会话
     public void stopAllSubSessions() {
+        ConsolePrintUtil.printRedLn(StrUtil.format(
+                "[线程诊断][stopAllSubSessions] 开始停止所有子会话, 子会话引擎数={}, session数={}, pending数={}",
+                engines.size(), sessions.size(), pendingQueue.size()
+        ));
         for (String sessionId : new ArrayList<>(engines.keySet())) {
             GroupChatEngine engine = engines.get(sessionId);
             if (engine != null) {
+                Thread t = engine.getCurrentThread();
+                ConsolePrintUtil.printRedLn(StrUtil.format(
+                        "[线程诊断][stopAllSubSessions] 停止子会话引擎: sessionId={}, threadName={}, threadAlive={}, threadState={}, running={}",
+                        sessionId,
+                        t != null ? t.getName() : "null",
+                        t != null && t.isAlive(),
+                        t != null ? t.getState() : "null",
+                        engine.isRunningRaw()
+                ));
                 stopSubSessionEngine(engine);
             }
         }
@@ -287,6 +301,7 @@ public class SubSessionManager {
         engines.clear();
         sessions.clear();
         pendingQueue.clear();
+        ConsolePrintUtil.printRedLn("[线程诊断][stopAllSubSessions] 所有子会话已停止, 集合已清空");
     }
 
 
@@ -360,6 +375,15 @@ public class SubSessionManager {
     }
 
     private void stopSubSessionEngine(GroupChatEngine engine) {
+        Thread engineThread = engine.getCurrentThread();
+        ConsolePrintUtil.printRedLn(StrUtil.format(
+                "[线程诊断][stopSubSession] 开始停止子会话引擎, threadName={}, threadAlive={}, threadState={}, running={}",
+                engineThread != null ? engineThread.getName() : "null",
+                engineThread != null && engineThread.isAlive(),
+                engineThread != null ? engineThread.getState() : "null",
+                engine.isRunningRaw()
+        ));
+
         engine.setRunning(false);
 
         Map<String, GraphEngine> runningGraphs = engine.getRunningGraphEngines();
@@ -372,9 +396,12 @@ public class SubSessionManager {
             }
         }
 
-        Thread engineThread = engine.getCurrentThread();
         if (engineThread != null && engineThread.isAlive()) {
             engineThread.interrupt();
+            ConsolePrintUtil.printRedLn(StrUtil.format(
+                    "[线程诊断][stopSubSession] 已 interrupt 子会话线程: {}, running 已设为 false",
+                    engineThread.getName()
+            ));
         }
     }
 }

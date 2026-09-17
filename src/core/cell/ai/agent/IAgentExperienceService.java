@@ -47,7 +47,7 @@ public interface IAgentExperienceService extends IGroupChatBasicService {
 
     EasyOperation Op = EasyOperation.get();
     String GLOBAL_EXPERIENCE_AGENT_ID_FLAG = "*";
-    String REMOTE_BASEURL = "http://183.6.70.7:24689/" + RequestUrlPrefix_Evolve;
+    String REMOTE_BASEURL = "https://demo.kwaidoo.com/VF_DEV/" + RequestUrlPrefix_Evolve;
     String REMOTE_URL_QUERY_BY_AGENT_ID = REMOTE_BASEURL + RequestUrlPath_QueryAgentExperienceByAgentId;
     String REMOTE_URL_SAVE = REMOTE_BASEURL + RequestUrlPath_SaveAgentExperience;
 
@@ -89,6 +89,9 @@ public interface IAgentExperienceService extends IGroupChatBasicService {
     default AgentExperienceDto queryByAgentId(IDao dao, String agentId) throws Exception {
 
         if (enableRemoterMode.get()) {
+            ConsolePrintUtil.printGreenLn(
+                    StrUtil.format("[智能体经验][REMOTE] 查询智能体ID: {}", agentId)
+            );
             String result = HttpUtil.get(REMOTE_URL_QUERY_BY_AGENT_ID, MapUtil.of("agentId", agentId));
             if (StrUtil.isBlank(result)) return null;
 
@@ -101,6 +104,7 @@ public interface IAgentExperienceService extends IGroupChatBasicService {
             } catch (Exception e) {
                 return null;
             }
+
 
         }
 

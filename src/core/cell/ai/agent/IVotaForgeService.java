@@ -31,6 +31,7 @@ import cn.hutool.core.util.StrUtil;
 import gpf.adur.data.AttachData;
 import gpf.adur.data.Form;
 import gpf.adur.data.ResultSet;
+import gpf.adur.data.TableData;
 import octo.cm.constant.WorkBenchConst;
 import octo.cm.enums.DefaultSystemModule;
 import octo.cm.exception.business.DomainException;
@@ -59,11 +60,6 @@ import java.util.concurrent.CompletableFuture;
 // cell.ai.agent.IVotaForgeService
 public interface IVotaForgeService extends ServiceCellIntf, IGroupChatBasicService {
 
-    static IVotaForgeService get() {
-        return Cells.get(IVotaForgeService.class);
-    }
-
-
     // 群聊业务域名称模板
     String BUS_DOMAIN_NAME_TEMPLATE = "群聊会话实例_{}";
     // 默认父级业务域
@@ -71,6 +67,9 @@ public interface IVotaForgeService extends ServiceCellIntf, IGroupChatBasicServi
     // 逻辑删除标志位
     String LOGICAL_DELETE_FLAG = "#del#";
 
+    static IVotaForgeService get() {
+        return Cells.get(IVotaForgeService.class);
+    }
 
     // 获取业务域
     default DomainDto getBusDomain(String groupChatInstId) {
@@ -168,7 +167,7 @@ public interface IVotaForgeService extends ServiceCellIntf, IGroupChatBasicServi
             if (existedDomain == null) return;
             String domainUuid = existedDomain.getDomainUuid();
             domainService.deleteDomain(Progress.newOutput(), domainUuid);
-        } catch (Exception e){
+        } catch (Exception e) {
             Op.logException(e);
         }
 
@@ -454,6 +453,10 @@ public interface IVotaForgeService extends ServiceCellIntf, IGroupChatBasicServi
 
 //            panelDesign = IPanelDesignService.get().savePanelWebPageWithCustomHtml(dao, observer, panelCode, finalResult);
 
+            // 临时方法，后续调整
+            savePanelWebPage(dao, observer, panelDesign, finalResult);
+
+
             dao.commit();
 
             // 直接发布
@@ -469,6 +472,27 @@ public interface IVotaForgeService extends ServiceCellIntf, IGroupChatBasicServi
         }
 
 
+    }
+
+    default void savePanelWebPage(IDao dao, OctoDomainOpObserver observer, Form panelDesignForm, String finalResult) throws Exception {
+        String panelName = panelDesignForm.getString("面板名称");
+
+        String pageName = StrUtil.format("{}_个性", panelName);
+
+        TableData panelPageTd = new TableData(WorkBenchConst.SlaveFormModelId_PanelDesign_View_Orchestration_WebPage);
+        Form webPageForm = Op.newForm(panelPageTd.getFormModelId());
+        webPageForm.setAttrValue("页面名称", pageName);
+        webPageForm.setAttrValue("页面代码", finalResult);
+
+        panelPageTd.add(webPageForm);
+
+        panelDesignForm.setAttrValue("面板网页", panelPageTd);
+
+        panelDesignForm.setAttrValue("页面入口", pageName);
+
+        IFormMgr.get().updateForm(null, dao, panelDesignForm, observer);
+
+        dao.commit();
     }
 
 

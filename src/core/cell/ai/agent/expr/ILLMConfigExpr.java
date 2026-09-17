@@ -1,6 +1,7 @@
 package cell.ai.agent.expr;
 
 import ai.agent.engine.groupChat.model.definition.LLMConfig;
+import ai.agent.service.groupChat.manager.LLMConfigManager;
 import ai.agent.service.groupChat.manager.OrchManager;
 import cell.CellIntf;
 import cell.cdao.IDao;
@@ -71,7 +72,8 @@ public interface ILLMConfigExpr extends CellIntf {
             dao.commit();
         }
 
-
+        // 刷新内存缓存
+        LLMConfigManager.loadModels();
     }
 
     @MethodDeclare(
@@ -85,6 +87,8 @@ public interface ILLMConfigExpr extends CellIntf {
             dao.commit();
         }
 
+        // 刷新内存缓存
+        LLMConfigManager.loadModels();
     }
 
 

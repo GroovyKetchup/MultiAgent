@@ -111,7 +111,7 @@ public interface IApplicationExpr extends CellIntf {
 
             if (appForm == null) throw new RuntimeException(StrUtil.format("不存在编号为[{}]的应用", applicationCode));
 
-            Form form = JsonToFormConversionUtil.convert(appForm, jsonObject);
+            Form form = JsonToFormConversionUtil.convert(dao,appForm, jsonObject);
 
             if (form == null) throw new RuntimeException("应用配置数据有误，无法进行转换");
 
