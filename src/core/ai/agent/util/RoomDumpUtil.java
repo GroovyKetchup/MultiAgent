@@ -27,6 +27,7 @@ public class RoomDumpUtil {
     public static final String FILE_PAYLOAD_ZIP = "payload.zip";
     public static final String FILE_ROOM_DATA = "room.data";
     public static final String FILE_ENGINE_DATA = "engine.data";
+    public static final String FILE_CUSTOM_PAGE_RESOURCES = "custom-page-resources.zip";
     public static final String TEMP_DIR_PREFIX = "./temp/RoomDump_";
 
     /**
@@ -91,7 +92,11 @@ public class RoomDumpUtil {
                 }
             }
 
-            return new DumpPackage(domainCode, payloadBytes, roomDataJson, engineDataJson);
+            File customPageResourcesFile = new File(tempDir, FILE_CUSTOM_PAGE_RESOURCES);
+            byte[] customPageResourceZipBytes = customPageResourcesFile.exists()
+                    ? FileUtil.readBytes(customPageResourcesFile) : null;
+
+            return new DumpPackage(domainCode, payloadBytes, roomDataJson, engineDataJson, customPageResourceZipBytes);
 
         } finally {
             FileUtil.del(tempDir);
@@ -123,12 +128,15 @@ public class RoomDumpUtil {
          * 引擎数据JSON字符串（可选，来自engine.data）
          */
         private final String engineDataJson;
+        private final byte[] customPageResourceZipBytes;
 
-        public DumpPackage(String domainCode, byte[] payloadBytes, String roomDataJson, String engineDataJson) {
+        public DumpPackage(String domainCode, byte[] payloadBytes, String roomDataJson, String engineDataJson,
+                           byte[] customPageResourceZipBytes) {
             this.domainCode = domainCode;
             this.payloadBytes = payloadBytes;
             this.roomDataJson = roomDataJson;
             this.engineDataJson = engineDataJson;
+            this.customPageResourceZipBytes = customPageResourceZipBytes;
         }
 
         public String getDomainCode() {
@@ -153,6 +161,14 @@ public class RoomDumpUtil {
 
         public boolean hasEngineData() {
             return StrUtil.isNotBlank(engineDataJson);
+        }
+
+        public boolean hasCustomPageResourceZip() {
+            return customPageResourceZipBytes != null;
+        }
+
+        public byte[] getCustomPageResourceZipBytes() {
+            return customPageResourceZipBytes;
         }
     }
 }

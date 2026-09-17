@@ -13,6 +13,7 @@ import ai.agent.util.RoomDumpUtil;
 import ai.agent.util.WebAppUtil;
 import ai.agent.util.groupChat.GroupChatEngineStoreUtil;
 import ai.agent.util.groupChat.GroupChatFileUtil;
+import cell.ai.webPage.cdn.CustomPageResourceApi;
 import bap.cells.BasicCell;
 import cell.ai.agent.IGroupChatRoomService;
 import cell.cdao.IDao;
@@ -133,6 +134,14 @@ public class CGroupChatFileController extends BasicCell implements IGroupChatFil
                 initRoomAfterImport(domainCode, dumpPackage);
             }
 
+            if (dumpPackage.hasCustomPageResourceZip()) {
+                try {
+                    CustomPageResourceApi.importZip(domainCode, dumpPackage.getCustomPageResourceZipBytes());
+                } catch (Exception e) {
+                    return RespondDto.newError("工作室数据已导入，但个性页面资源导入失败：" + e.getMessage());
+                }
+            }
+
         } catch (Exception e) {
             return RespondDto.newError(e.getMessage());
         }
@@ -148,6 +157,7 @@ public class CGroupChatFileController extends BasicCell implements IGroupChatFil
         Progress<?> prog2 = Progress.newOutput();
         OctoCM2WorkbenchExtDumpConfig dumpConfig = new OctoCM2WorkbenchExtDumpConfig(domainCode);
         byte[] payload = dumpConfig.exportDumpData(prog2, null);
+        byte[] customPageResourceZip = CustomPageResourceApi.exportZip(domainCode);
 
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         try (ZipOutputStream zos = new ZipOutputStream(baos, StandardCharsets.UTF_8)) {
@@ -159,6 +169,10 @@ public class CGroupChatFileController extends BasicCell implements IGroupChatFil
             // payload.zip
             zos.putNextEntry(new ZipEntry(WorkbenchDomainMgrTablePanel.FILE_NAME_PAYLOAD));
             zos.write(payload);
+            zos.closeEntry();
+
+            zos.putNextEntry(new ZipEntry(RoomDumpUtil.FILE_CUSTOM_PAGE_RESOURCES));
+            zos.write(customPageResourceZip);
             zos.closeEntry();
 
             // room.data（可选，房间Form JSON）
@@ -222,7 +236,7 @@ public class CGroupChatFileController extends BasicCell implements IGroupChatFil
                     // 有 room.data：直接用导出的 JSON 创建房间 Form
                     JSONObject roomJson = JSONUtil.parseObj(dumpPackage.getRoomDataJson());
                     Form roomForm = new Form(GroupChatConstants.FormModelId_GroupChatRoom);
-                    roomForm = JsonToFormConversionUtil.convert(roomForm, roomJson);
+                    roomForm = JsonToFormConversionUtil.convert(dao, roomForm, roomJson);
                     IFormMgr.get().createForm(dao, roomForm);
                 } else {
                     // fallback：重新创建房间记录
